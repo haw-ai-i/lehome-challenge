@@ -36,6 +36,7 @@
 
 ### 1. Installation
 We recommend using our official Docker image for development and evaluation to ensure reproducible and consistent environments.
+***But!!! Docker is not ready yet; please use uv for Manual Installation for now.***
 
 #### Recommended: Use Docker (Quick Start)
 
@@ -53,7 +54,7 @@ We recommend using our official Docker image for development and evaluation to e
      lehome/competition:latest
    ```
 
-#### Advanced: Manual Installation (Step-by-step)
+#### Manual Installation (Step-by-step)
 
 If you prefer to set up the environment manually or want more customization, please refer to our [step-by-step installation guide](docs/installation.md).
 

@@ -30,7 +30,7 @@ This will create a virtual environment and install all required dependencies.
 ```bash
 cd third_party
 git clone https://github.com/lehome-official/IsaacLab.git # clone from our repo plz
-cd IsaacLab
+
 ```
 
 ### 4. Install IsaacLab
@@ -38,7 +38,7 @@ cd IsaacLab
 Return to the project root and install IsaacLab:
 
 ```bash
-cd ../..
+cd ..
 source .venv/bin/activate
 ./third_party/IsaacLab/isaaclab.sh -i none
 ```
