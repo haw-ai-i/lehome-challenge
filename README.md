@@ -150,7 +150,7 @@ python -m scripts.eval \
 #### Garment Test Configuration
 Under the directory `Assets/objects/Challenge_Garment/Release`, each garment category folder contains a corresponding text file listing the garment names (e.g., `Tops_Long/Tops_Long.txt` contains Top_Long_Seen_0, Top_Long_Seen_1, etc.). You can set --garment_type to `tops_long` to evaluate all garments within the `Tops_Long` category. The same logic applies to all other garment types.
 
-To test a specific subset of garments, you can modify `Assets/objects/Challenge_Garment/Release/Release_test_list.txt` by including only the target garment names according to `Tops_Long.txt`, `Tops_Short.txt`, `Trousers_Long`, `Trousers_Short`.
+To test a specific subset of garments, you can modify `Assets/objects/Challenge_Garment/Release/Release_test_list.txt` by including only the target garment names according to `Tops_Long.txt`, `Tops_Short.txt`, `Trousers_Long.txt`, `Trousers_Short.txt`.
 
 > 📖 **For detailed policy integration guide**, see [scripts/eval_policy/POLICY_GUIDE.md](scripts/eval_policy/POLICY_GUIDE.md)
 
