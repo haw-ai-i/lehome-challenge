@@ -277,7 +277,7 @@ python -m scripts.dataset_sim replay \
 |-----------|------|---------|-------------|
 | `--task` | str | `LeHome-BiSO101-Direct-Garment-v2` | Task environment name |
 | `--dataset_root` | str | `Datasets/record/001` | Input dataset directory |
-| `--output_root` | str | `None` | Output directory (None = no saving, only visualization) |
+| `--output_root` | str | `None` | Output directory (Should be specified (e.g, `Datasets/replay_stored/example/record_top_long_release_10`) if `--save_successful_only` is true) |
 | `--num_replays` | int | `1` | Number of replays per episode |
 | `--save_successful_only` | flag | `False` | Only save episodes that achieve success |
 | `--start_episode` | int | `0` | Starting episode index (inclusive) |

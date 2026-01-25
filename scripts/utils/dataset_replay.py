@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import shutil
 from typing import Dict, Optional, Tuple, Any
 import gymnasium as gym
 import numpy as np
@@ -217,7 +218,13 @@ def create_replay_dataset(
         return None, None
 
     output_path = Path(args.output_root)
-    root = get_next_experiment_path_with_gap(output_path)
+    source_folder_name = Path(args.dataset_root).name  # 获取 "005"
+    root = output_path / source_folder_name
+    if root.exists():
+        logger.warning(f"Target path {root} already exists. Deleting it to create a fresh replay dataset.")
+        shutil.rmtree(root)
+    if not output_path.exists():
+        output_path.mkdir(parents=True, exist_ok=True)
 
     # Use the same features as the source dataset
     features = source_dataset.meta.features
