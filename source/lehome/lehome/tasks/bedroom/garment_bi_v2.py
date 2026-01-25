@@ -38,6 +38,9 @@ class GarmentEnv(DirectRLEnv):
         self.cfg = cfg
         self.action_scale = self.cfg.action_scale
         self.object = None  # Will be created in _setup_scene
+        
+        # Cache for distance-based reward (to handle step_interval decorator)
+        self._last_computed_reward = 0.0
 
         self.garment_loader = ChallengeGarmentLoader(cfg.garment_cfg_base_path)
         self.garment_config = self.garment_loader.load_garment_config(
@@ -331,12 +334,109 @@ class GarmentEnv(DirectRLEnv):
         return pointclouds
 
     def _get_rewards(self) -> torch.Tensor:
-        success = self._check_success()
+        """Calculate distance-based reward for garment folding task.
+        
+        Reward Components:
+        1. Distance-based reward: Encourages getting closer to target distances
+        2. Success bonus: Large reward when all conditions are met
+        3. Progress reward: Partial credit for meeting some conditions
+        
+        Returns:
+            torch.Tensor: Reward value (0.0 to 1.0+)
+        """
+        # ========== Original Simple Reward (Sparse) ==========
+        # Uncomment below to use simple binary reward (0 or 1)
+        # success = self._check_success()
+        # if success:
+        #     total_reward = 1
+        # else:
+        #     total_reward = 0
+        # return total_reward
+        # =====================================================
+        
+        # ========== Distance-Based Reward (Dense) ==========
+        # Check if object is valid
+        if self.object is None:
+            return 0.0
+        if not hasattr(self.object, "_cloth_prim_view"):
+            return 0.0
+        
+        # Get detailed success check result
+        garment_type = self.garment_loader.get_garment_type(self.cfg.garment_name)
+        result = success_checker_garment_fold(self.object, garment_type)
+        
+        # Handle step_interval decorator returning False
+        if not isinstance(result, dict):
+            # Return cached reward from last computation (maintains reward continuity)
+            return self._last_computed_reward
+        
+        # Extract details
+        success = result.get("success", False)
+        details = result.get("details", {})
+        
+        # If success, return maximum reward
         if success:
-            total_reward = 1
-        else:
-            total_reward = 0
-        return total_reward
+            self._last_computed_reward = 1.0
+            return 1.0
+        
+        # Calculate distance-based reward
+        total_reward = 0.0
+        num_conditions = len(details)
+        
+        if num_conditions == 0:
+            return 0.0
+        
+        # For each condition, calculate distance-based partial reward
+        condition_rewards = []
+        for cond_key, cond_info in details.items():
+            value = cond_info.get("value", 0.0)
+            threshold = cond_info.get("threshold", 0.0)
+            passed = cond_info.get("passed", False)
+            
+            # Determine if this is a "less than" or "greater than" condition
+            # from the description
+            description = cond_info.get("description", "")
+            is_less_than = "<=" in description
+            
+            if passed:
+                # Full credit for this condition
+                condition_reward = 1.0
+            else:
+                # Partial credit based on distance to threshold
+                if is_less_than:
+                    # For "distance <= threshold" conditions
+                    # Reward decreases as distance exceeds threshold
+                    if threshold > 0:
+                        # Use exponential decay for smooth reward shaping
+                        # reward = exp(-k * excess_ratio)
+                        excess_ratio = max(0.0, (value - threshold) / threshold)
+                        condition_reward = np.exp(-2.0 * excess_ratio)
+                    else:
+                        condition_reward = 0.0
+                else:
+                    # For "distance >= threshold" conditions
+                    # Reward increases as distance approaches threshold
+                    if threshold > 0:
+                        # reward = 1 - exp(-k * ratio)
+                        ratio = value / threshold
+                        condition_reward = max(0.0, 1.0 - np.exp(-2.0 * (1.0 - ratio)))
+                    else:
+                        condition_reward = 0.0
+            
+            condition_rewards.append(condition_reward)
+            total_reward += condition_reward
+        
+        # Normalize by number of conditions (average reward across all conditions)
+        average_reward = total_reward / num_conditions
+        
+        # Scale to [0, 0.9] range to reserve 1.0 for success
+        final_reward = average_reward * 0.9
+        
+        # Cache the computed reward for non-check steps
+        self._last_computed_reward = float(final_reward)
+        
+        return float(final_reward)
+        # ===================================================
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
@@ -348,9 +448,6 @@ class GarmentEnv(DirectRLEnv):
             return False
 
         if not hasattr(self.object, "_cloth_prim_view"):
-            return False
-
-        if not hasattr(self.object._cloth_prim_view, "_max_particles_per_cloth"):
             return False
 
         garment_type = self.garment_loader.get_garment_type(self.cfg.garment_name)
@@ -366,11 +463,6 @@ class GarmentEnv(DirectRLEnv):
             success = False
             result = None
         elif not hasattr(self.object, "_cloth_prim_view"):
-            success = False
-            result = None
-        elif self.object._device != "cpu" and not hasattr(
-            self.object._cloth_prim_view, "_max_particles_per_cloth"
-        ):
             success = False
             result = None
         else:
@@ -409,6 +501,9 @@ class GarmentEnv(DirectRLEnv):
         if env_ids is None:
             env_ids = self.left_arm._ALL_INDICES
         super()._reset_idx(env_ids)
+        
+        # Reset cached reward on episode reset
+        self._last_computed_reward = 0.0
 
         left_joint_pos = self.left_arm.data.default_joint_pos[env_ids]
         right_joint_pos = self.right_arm.data.default_joint_pos[env_ids]
