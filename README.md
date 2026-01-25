@@ -35,7 +35,6 @@
   - [3. Train](#3-train)
     - [Quick Start](#quick-start)
   - [4. Eval](#4-eval)
-    - [Quick Start](#quick-start-1)
     - [Common Options](#common-options)
     - [Garment Test Configuration](#garment-test-configuration)
 - [📮 Submission](#-submission)
@@ -83,18 +82,23 @@ hf download lehome/asset_challenge --repo-type dataset --local-dir Assets
 
 #### Download Example Dataset
 
-We provide example demonstration data collected on Release assets. Download from HuggingFace:
+We provide demonstrations for four types of garments. Download from HuggingFace:
 
 ```bash
-hf download lehome/dataset_challenge --repo-type dataset --local-dir Datasets/record/example
+hf download lehome/dataset_challenge_merged --repo-type dataset --local-dir Datasets/example
 ```
 
-This step is optional if you plan to collect your own data.
+If you need depth information or individual data for each garment. Download from HuggingFace:
+
+```bash
+hf download lehome/dataset_challenge --repo-type dataset --local-dir Datasets/example
+```
+
+If you need to collect additional data yourself (using SO101 Leader is strongly recommended).
 
 #### Collect Your Own Data
 
 For detailed instructions on teleoperation data collection and dataset processing, please refer to our [Dataset Collection and Processing Guide](docs/datasets.md).
-
 
 ### 3. Train
 
@@ -128,18 +132,16 @@ See [Training Guide](docs/training.md) for complete configuration examples and f
 
 Evaluate your trained policy on the challenge garments. The framework supports LeRobot policies (ACT, Diffusion, VLA) and custom implementations.
 
-#### Quick Start
-
 **Examples:**
 
 ```bash
-# Evaluate LeRobot policy (Recommended)
+# Evaluate using LeRobot policy 
 # Note: --policy_path and --dataset_root are required parameters for LeRobot policies, ready to run once the dataset and model checkpoints are prepared.
 python -m scripts.eval \
     --policy_type lerobot \
-    --policy_path outputs/train/act_fold/checkpoints/100000/pretrained_model \
+    --policy_path outputs/train/act \
     --garment_type "tops_long" \
-    --dataset_root Datasets/record/example/record_top_long_release_10/001 \
+    --dataset_root Datasets/example/top_long \
     --num_episodes 5 \
     --enable_cameras \
     --device cpu
