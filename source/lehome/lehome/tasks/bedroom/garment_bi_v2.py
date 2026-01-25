@@ -386,51 +386,68 @@ class GarmentEnv(DirectRLEnv):
         if num_conditions == 0:
             return 0.0
         
-        # For each condition, calculate distance-based partial reward
-        condition_rewards = []
+        # Calculate weighted reward based on condition type
+        # Primary conditions (<=): folding-related, higher weight
+        # Secondary conditions (>=): shape constraints, lower weight
+        primary_rewards = []
+        secondary_rewards = []
+        
         for cond_key, cond_info in details.items():
             value = cond_info.get("value", 0.0)
             threshold = cond_info.get("threshold", 0.0)
             passed = cond_info.get("passed", False)
             
-            # Determine if this is a "less than" or "greater than" condition
-            # from the description
             description = cond_info.get("description", "")
             is_less_than = "<=" in description
             
             if passed:
-                # Full credit for this condition
                 condition_reward = 1.0
             else:
-                # Partial credit based on distance to threshold
                 if is_less_than:
-                    # For "distance <= threshold" conditions
-                    # Reward decreases as distance exceeds threshold
+                    # Primary folding conditions: steep penalty when far from target
                     if threshold > 0:
-                        # Use exponential decay for smooth reward shaping
-                        # reward = exp(-k * excess_ratio)
                         excess_ratio = max(0.0, (value - threshold) / threshold)
-                        condition_reward = np.exp(-2.0 * excess_ratio)
+                        # Steeper decay for primary conditions
+                        condition_reward = np.exp(-3.0 * excess_ratio)
                     else:
                         condition_reward = 0.0
                 else:
-                    # For "distance >= threshold" conditions
-                    # Reward increases as distance approaches threshold
+                    # Secondary shape constraints: gentler reward curve
                     if threshold > 0:
-                        # reward = 1 - exp(-k * ratio)
                         ratio = value / threshold
-                        condition_reward = max(0.0, 1.0 - np.exp(-2.0 * (1.0 - ratio)))
+                        # Less aggressive growth for secondary conditions
+                        condition_reward = max(0.0, 1.0 - np.exp(-1.5 * (1.0 - ratio)))
                     else:
                         condition_reward = 0.0
             
-            condition_rewards.append(condition_reward)
-            total_reward += condition_reward
+            if is_less_than:
+                primary_rewards.append(condition_reward)
+            else:
+                secondary_rewards.append(condition_reward)
         
-        # Normalize by number of conditions (average reward across all conditions)
-        average_reward = total_reward / num_conditions
+        # Weighted combination: primary conditions dominate
+        # Only give significant reward when primary conditions are mostly satisfied
+        num_primary = len(primary_rewards)
+        num_secondary = len(secondary_rewards)
         
-        # Scale to [0, 0.9] range to reserve 1.0 for success
-        final_reward = average_reward * 0.9
+        if num_primary > 0:
+            avg_primary = sum(primary_rewards) / num_primary
+            # Use geometric mean to heavily penalize if any primary condition is bad
+            min_primary = min(primary_rewards) if primary_rewards else 0.0
+            # Combine average and minimum to ensure all primary conditions matter
+            primary_score = (avg_primary ** 0.7) * (min_primary ** 0.3)
+        else:
+            primary_score = 1.0
+        
+        if num_secondary > 0:
+            avg_secondary = sum(secondary_rewards) / num_secondary
+            secondary_score = avg_secondary
+        else:
+            secondary_score = 1.0
+        
+        # Final reward: primary conditions weighted heavily (80%), secondary (20%)
+        # Scale to [0, 0.9] to reserve 1.0 for success
+        final_reward = (0.8 * primary_score + 0.2 * secondary_score) * 0.9
         
         # Cache the computed reward for non-check steps
         self._last_computed_reward = float(final_reward)

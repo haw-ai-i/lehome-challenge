@@ -125,9 +125,10 @@ def run_evaluation_loop(
             else:
                 reward = float(reward_value)
             
-            # Accumulate metrics only during normal steps (not extra steps)
+            # Accumulate reward for all steps (including post-success steps)
+            episode_return += reward
+            # Only count length before success (for consistency with episode termination)
             if not success_flag:
-                episode_return += reward
                 episode_length += 1
 
             # Update Observation
