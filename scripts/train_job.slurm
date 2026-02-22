@@ -111,8 +111,10 @@ source "$REPO_DIR/scripts/setup_env.sh"
 cd "$REPO_DIR"
 
 export WANDB_PROJECT="${WANDB_PROJECT:-lehome-challenge}"
+export OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}"
+echo "OMNI_KIT_ACCEPT_EULA=${OMNI_KIT_ACCEPT_EULA}"
 
 export CUDA_VISIBLE_DEVICES=0
 
-uv run lerobot-train --config_path=configs/train_smolvla.yaml
+OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA}" uv run lerobot-train --config_path=configs/train_smolvla.yaml
 ' bash "$@"

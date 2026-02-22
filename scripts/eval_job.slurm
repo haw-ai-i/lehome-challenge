@@ -109,14 +109,17 @@ source "$REPO_DIR/scripts/setup_env.sh"
 cd "$REPO_DIR"
 
 export WANDB_PROJECT="${WANDB_PROJECT:-lehome-challenge}"
+export OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}"
+echo "OMNI_KIT_ACCEPT_EULA=${OMNI_KIT_ACCEPT_EULA}"
 
 export CUDA_VISIBLE_DEVICES=0
 
-uv run python -m scripts.eval \
+OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA}" uv run python -m scripts.eval \
     --policy_type lerobot \
     --policy_path /mnt/lustre/koa/scratch/yosubs/koa-cli/projects/lehome-challenge/jobs/20260220_222246_test/repo/outputs/train/act_top_long/checkpoints/last/pretrained_model \
     --garment_type "top_long" \
     --dataset_root ../../../Datasets/example/top_long_merged \
     --num_episodes 2 \
-    --device cpu
+    --device cpu \
+    --headless
 ' bash "$@"

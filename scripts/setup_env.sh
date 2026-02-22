@@ -87,6 +87,8 @@ SHARED_DIR="${PROJECT_ROOT}/../../.."
 
 # Add uv to PATH
 export PATH="${HOME}/.local/bin:${PATH}"
+# Avoid interactive Isaac/Kit EULA prompts in non-interactive jobs.
+export OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}"
 
 # Cache location for environment hashes (used to detect changes between runs)
 ENV_CACHE_DIR="${SHARED_ENV_DIR}/.koa"
@@ -167,7 +169,6 @@ if [[ "${recreate}" -eq 1 ]]; then
   cd "${REPO_DIR}"
 
   source "${SHARED_ENV_DIR}/bin/activate"
-  export OMNI_KIT_ACCEPT_EULA=YES
   "${SHARED_DIR}/third_party/IsaacLab/isaaclab.sh" -i none
 
   uv pip install -e "${REPO_DIR}/source/lehome"
