@@ -1,6 +1,7 @@
 dataset:
   repo_id: repo_smolvla
-  root: Datasets/example/top_long_merged
+  root: ../../../Datasets/example/top_long_merged
+  video_backend: pyav
 
 policy:
   type: smolvla

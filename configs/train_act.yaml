@@ -1,6 +1,7 @@
 dataset:
   repo_id: repo_act
-  root: Datasets/example/top_long_merged
+  root: ../../../Datasets/example/top_long_merged
+  video_backend: pyav
 
 policy:
   type: act
