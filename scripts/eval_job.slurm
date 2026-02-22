@@ -1,11 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=lehome-challenge
+#SBATCH --job-name=lehome-challenge-eval
 #SBATCH --partition=kill-shared
 #SBATCH --time=12:00:00
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:1
-#SBATCH --constraint=hopper
 
 set -euo pipefail
 
@@ -58,19 +56,19 @@ echo "KOA_RUN_METADATA_DIR=${KOA_RUN_METADATA_DIR:-unset}"
 echo "KOA_SHARED_ENV=${KOA_SHARED_ENV:-unset}"
 echo
 
-echo "==== GPU Info ====="
-if command -v nvidia-smi >/dev/null 2>&1; then
-  nvidia-smi
-else
-  echo "nvidia-smi not available"
-fi
-echo
+# echo "==== GPU Info ====="
+# if command -v nvidia-smi >/dev/null 2>&1; then
+#   nvidia-smi
+# else
+#   echo "nvidia-smi not available"
+# fi
+# echo
 
-if [[ "${CUDA_VISIBLE_DEVICES:-}" =~ MIG- ]]; then
-  echo "Detected CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
-  echo "This job was scheduled onto a MIG slice, which vLLM cannot handle yet. Exiting early so the job can be resubmitted to a full GPU."
-  exit 2
-fi
+# if [[ "${CUDA_VISIBLE_DEVICES:-}" =~ MIG- ]]; then
+#   echo "Detected CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
+#   echo "This job was scheduled onto a MIG slice, which vLLM cannot handle yet. Exiting early so the job can be resubmitted to a full GPU."
+#   exit 2
+# fi
 
 echo "==== Python Environment ====="
 if command -v python >/dev/null 2>&1; then
@@ -114,5 +112,11 @@ export WANDB_PROJECT="${WANDB_PROJECT:-lehome-challenge}"
 
 export CUDA_VISIBLE_DEVICES=0
 
-uv run lerobot-train --config_path=configs/train_smolvla.yaml
+uv run python -m scripts.eval \
+    --policy_type lerobot \
+    --policy_path /mnt/lustre/koa/scratch/yosubs/koa-cli/projects/lehome-challenge/jobs/20260220_222246_test/repo/outputs/train/act_top_long/checkpoints/last/pretrained_model \
+    --garment_type "top_long" \
+    --dataset_root ../../../Datasets/example/top_long_merged \
+    --num_episodes 2 \
+    --device cpu
 ' bash "$@"
