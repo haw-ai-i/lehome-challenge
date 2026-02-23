@@ -31,6 +31,11 @@ mkdir -p "${HF_HOME}" "${TRITON_CACHE_DIR}" "${TORCH_HOME}" "${PIP_CACHE_DIR}" "
 export REPO_DIR
 export RESULTS_DIR
 
+if [[ -z "${MODEL_SPECIFIC_ENV_NAME:-}" ]]; then
+  echo "MODEL_SPECIFIC_ENV_NAME is required (e.g. default, pi, groot)"
+  exit 1
+fi
+
 echo "==== Cache Directories ====="
 echo "CACHE_ROOT=${CACHE_ROOT}"
 echo "XDG_CACHE_HOME=${XDG_CACHE_HOME}"
@@ -56,6 +61,7 @@ echo "KOA_ML_CODE_ROOT=${KOA_ML_CODE_ROOT:-unset}"
 echo "KOA_RUN_DIR=${KOA_RUN_DIR:-unset}"
 echo "KOA_RUN_METADATA_DIR=${KOA_RUN_METADATA_DIR:-unset}"
 echo "KOA_SHARED_ENV=${KOA_SHARED_ENV:-unset}"
+echo "MODEL_SPECIFIC_ENV_NAME=${MODEL_SPECIFIC_ENV_NAME}"
 echo
 
 echo "==== GPU Info ====="
@@ -107,6 +113,7 @@ CONTAINER_CMD+=("${CONTAINER_IMAGE}")
 set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 export PYTHONUNBUFFERED=1
+export MODEL_SPECIFIC_ENV_NAME="${MODEL_SPECIFIC_ENV_NAME}"
 source "$REPO_DIR/scripts/setup_env.sh"
 cd "$REPO_DIR"
 
@@ -116,5 +123,5 @@ echo "OMNI_KIT_ACCEPT_EULA=${OMNI_KIT_ACCEPT_EULA}"
 
 export CUDA_VISIBLE_DEVICES=0
 
-OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA}" uv run lerobot-train --config_path=configs/train_smolvla.yaml
+OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA}" uv run lerobot-train --config_path=${CONFIG_PATH}
 ' bash "$@"

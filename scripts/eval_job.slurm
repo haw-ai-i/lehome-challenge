@@ -29,6 +29,11 @@ mkdir -p "${HF_HOME}" "${TRITON_CACHE_DIR}" "${TORCH_HOME}" "${PIP_CACHE_DIR}" "
 export REPO_DIR
 export RESULTS_DIR
 
+if [[ -z "${MODEL_SPECIFIC_ENV_NAME:-}" ]]; then
+  echo "MODEL_SPECIFIC_ENV_NAME is required (e.g. default, pi, groot)"
+  exit 1
+fi
+
 echo "==== Cache Directories ====="
 echo "CACHE_ROOT=${CACHE_ROOT}"
 echo "XDG_CACHE_HOME=${XDG_CACHE_HOME}"
@@ -54,6 +59,7 @@ echo "KOA_ML_CODE_ROOT=${KOA_ML_CODE_ROOT:-unset}"
 echo "KOA_RUN_DIR=${KOA_RUN_DIR:-unset}"
 echo "KOA_RUN_METADATA_DIR=${KOA_RUN_METADATA_DIR:-unset}"
 echo "KOA_SHARED_ENV=${KOA_SHARED_ENV:-unset}"
+echo "MODEL_SPECIFIC_ENV_NAME=${MODEL_SPECIFIC_ENV_NAME}"
 echo
 
 # echo "==== GPU Info ====="
@@ -105,6 +111,7 @@ CONTAINER_CMD+=("${CONTAINER_IMAGE}")
 set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 export PYTHONUNBUFFERED=1
+export MODEL_SPECIFIC_ENV_NAME="${MODEL_SPECIFIC_ENV_NAME}"
 source "$REPO_DIR/scripts/setup_env.sh"
 cd "$REPO_DIR"
 
@@ -119,7 +126,9 @@ OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA}" uv run python -m scripts.eval \
     --policy_path /mnt/lustre/koa/scratch/yosubs/koa-cli/projects/lehome-challenge/jobs/20260220_222246_test/repo/outputs/train/act_top_long/checkpoints/last/pretrained_model \
     --garment_type "top_long" \
     --dataset_root ../../../Datasets/example/top_long_merged \
+    --garment_cfg_base_path ../../../Assets/objects/Challenge_Garment \
     --num_episodes 2 \
     --device cpu \
+    --enable_cameras \
     --headless
 ' bash "$@"
