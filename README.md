@@ -96,6 +96,16 @@ Train using one of the pre-configured training files:
 lerobot-train --config_path=configs/train_<policy>.yaml
 ```
 
+Train with `koa-cli`:
+
+```bash
+# Train pi05
+koa submit scripts/train_job.slurm --desc "train pi05" --env CONFIG_PATH=configs/train_pi05.yaml --env MODEL_SPECIFIC_ENV_NAME=pi
+
+# Train groot n1.5
+koa submit scripts/train_job.slurm --desc "train groot_n15" --env CONFIG_PATH=configs/train_groot_n15.yaml --env MODEL_SPECIFIC_ENV_NAME=groot
+```
+
 **Available config files:**
 - `configs/train_act.yaml` - ACT 
 - `configs/train_dp.yaml` - DP
@@ -135,6 +145,12 @@ python -m scripts.eval \
     --num_episodes 5 \
     --enable_cameras \
     --device cpu
+```
+
+Evaluate with `koa-cli`:
+
+```bash
+koa submit scripts/eval_job.slurm --desc "eval groot_n15" --env POLICY_PATH=/mnt/lustre/koa/scratch/yosubs/koa-cli/projects/lehome-challenge/jobs/20260225_000818_train_groot_n15/repo/outputs/train/groot_n15_top_long/checkpoints/030000/pretrained_model --env MODEL_SPECIFIC_ENV_NAME=groot
 ```
 
 #### Common Options

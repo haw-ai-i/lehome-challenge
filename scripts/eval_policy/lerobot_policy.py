@@ -196,7 +196,7 @@ class LeRobotPolicy(BasePolicy):
                 obs_for_preproc[key] = value
 
         # Create transition format with complementary_data for VLA models
-        dummy_action = torch.zeros(1, self.action_dim, dtype=torch.float32, device=self.device)
+        dummy_action = torch.zeros(1, self.action_dim, dtype=torch.float32, device="cpu")
         transition = {
             TransitionKey.OBSERVATION: obs_for_preproc,
             TransitionKey.ACTION: dummy_action,

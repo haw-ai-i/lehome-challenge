@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=lehome-challenge-eval
 #SBATCH --partition=kill-shared
-#SBATCH --time=12:00:00
+#SBATCH --time=04:00:00
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=64G
 
@@ -123,7 +123,7 @@ export CUDA_VISIBLE_DEVICES=0
 
 OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA}" uv run python -m scripts.eval \
     --policy_type lerobot \
-    --policy_path /mnt/lustre/koa/scratch/yosubs/koa-cli/projects/lehome-challenge/jobs/20260220_222246_test/repo/outputs/train/act_top_long/checkpoints/last/pretrained_model \
+    --policy_path ${POLICY_PATH} \
     --garment_type "top_long" \
     --dataset_root ../../../Datasets/example/top_long_merged \
     --garment_cfg_base_path ../../../Assets/objects/Challenge_Garment \

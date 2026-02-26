@@ -21,6 +21,8 @@ snapshot_excludes:
   - outputs
   - Assets
   - .venv
+  - .venv-groot
+  - .venv-pi
   - logs
   - Datasets
   - third_party

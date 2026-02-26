@@ -78,32 +78,38 @@ if [[ -z "${HF_TOKEN:-}" && -n "${HF_HUB_TOKEN:-}" ]]; then
   export HF_TOKEN="${HF_HUB_TOKEN}"
 fi
 
-# Require a model-scoped environment selector so each model can have an isolated venv.
-if [[ -z "${MODEL_SPECIFIC_ENV_NAME:-}" ]]; then
-  log "MODEL_SPECIFIC_ENV_NAME is required (e.g. default, pi, groot)"
-  return 1
-fi
-
-SAFE_MODEL_ENV_NAME="$(printf '%s' "${MODEL_SPECIFIC_ENV_NAME}" | tr -cs 'A-Za-z0-9._-' '_')"
-
 # Shared uv-managed environment (overridable via KOA_SHARED_ENV); lives outside job snapshots.
-SHARED_ENV_DIR="${KOA_SHARED_ENV:-${PROJECT_ROOT}/../.${SAFE_MODEL_ENV_NAME}-venv}"
+BASE_SHARED_ENV_DIR="${KOA_SHARED_ENV:-}"
+
+MODEL_ENV_NAME="${MODEL_SPECIFIC_ENV_NAME:-default}"
+case "${MODEL_ENV_NAME}" in
+  ""|default|none|base)
+    SHARED_ENV_DIR="${BASE_SHARED_ENV_DIR}"
+    MODEL_ENV_NAME="default"
+    ;;
+  *)
+    _base_parent="$(dirname "${BASE_SHARED_ENV_DIR}")"
+    _base_name="$(basename "${BASE_SHARED_ENV_DIR}")"
+    SHARED_ENV_DIR="${_base_parent}/${_base_name}-${MODEL_ENV_NAME}"
+    ;;
+esac
+
 mkdir -p "${SHARED_ENV_DIR}"
 ENV_PYTHON="${SHARED_ENV_DIR}/bin/python"
-log "Using model-specific env '${MODEL_SPECIFIC_ENV_NAME}' at ${SHARED_ENV_DIR}"
+log "Using shared environment '${SHARED_ENV_DIR}' for MODEL_SPECIFIC_ENV_NAME='${MODEL_ENV_NAME}'"
 
 # Pick lerobot extra based on model env name unless explicitly overridden.
 LEROBOT_EXTRA="${LEROBOT_EXTRA:-}"
 if [[ -z "${LEROBOT_EXTRA}" ]]; then
-  case "${MODEL_SPECIFIC_ENV_NAME}" in
+  case "${MODEL_ENV_NAME}" in
     default|none|base)
       LEROBOT_EXTRA=""
       ;;
     pi|groot)
-      LEROBOT_EXTRA="${MODEL_SPECIFIC_ENV_NAME}"
+      LEROBOT_EXTRA="${MODEL_ENV_NAME}"
       ;;
     *)
-      log "Unsupported MODEL_SPECIFIC_ENV_NAME='${MODEL_SPECIFIC_ENV_NAME}'. Supported: default, pi, groot."
+      log "Unsupported MODEL_ENV_NAME='${MODEL_ENV_NAME}'. Supported: default, pi, groot."
       log "Set LEROBOT_EXTRA explicitly to override (empty for no extra)."
       return 1
       ;;
@@ -210,13 +216,15 @@ if [[ "${recreate}" -eq 1 ]]; then
   uv venv --clear "${SHARED_ENV_DIR}"
   uv sync "${UV_SYNC_EXTRA_ARGS[@]}"
 
+  LEROBOT_VERSION="0.4.3"
+  if [[ "${LEROBOT_EXTRA}" == "groot" ]]; then
+    uv pip install --python "${ENV_PYTHON}" flash-attn==2.8.3 --no-build-isolation
+    uv pip install --python "${ENV_PYTHON}" dm-tree
+  fi
   if [[ -n "${LEROBOT_EXTRA}" ]]; then
-    LEROBOT_VERSION="$(awk -F'"' '/lerobot==/ { split($2, a, "=="); print a[2]; exit }' "${PROJECT_ROOT}/pyproject.toml")"
-    if [[ -z "${LEROBOT_VERSION}" ]]; then
-      log "Failed to parse lerobot version from ${PROJECT_ROOT}/pyproject.toml"
-      return 1
-    fi
-    uv pip install --reinstall "lerobot[${LEROBOT_EXTRA}]==${LEROBOT_VERSION}"
+    uv pip install --python "${ENV_PYTHON}" "lerobot[${LEROBOT_EXTRA}]==${LEROBOT_VERSION}"
+  else
+    uv pip install --python "${ENV_PYTHON}" "lerobot==${LEROBOT_VERSION}"
   fi
 
   mkdir -p "${SHARED_DIR}/third_party"
@@ -226,16 +234,38 @@ if [[ "${recreate}" -eq 1 ]]; then
   source "${SHARED_ENV_DIR}/bin/activate"
   "${SHARED_DIR}/third_party/IsaacLab/isaaclab.sh" -i none
 
-  uv pip install -e "${REPO_DIR}/source/lehome"
+  uv pip install --python "${ENV_PYTHON}" -e "${REPO_DIR}/source/lehome"
+
+  # For some reason, flash-attn goes away after above steps, so we need to reinstall it.
+  if [[ "${LEROBOT_EXTRA}" == "groot" ]]; then
+    uv pip install --python "${ENV_PYTHON}" flash-attn==2.8.3 --no-build-isolation
+  fi
+
+  if [[ "${LEROBOT_EXTRA}" == "pi" ]]; then
+    # Uninstall any existing transformers package before installing patched version
+    uv pip uninstall --python "${ENV_PYTHON}" transformers
+    # Install patched transformers without requiring a local git executable.
+    TRANSFORMERS_PI_URL="${TRANSFORMERS_PI_URL:-https://github.com/huggingface/transformers/archive/dcddb970176382c0fcf4521b0c0e6fc15894dfe0.zip}"
+    uv pip install --python "${ENV_PYTHON}" "transformers @ ${TRANSFORMERS_PI_URL}"
+
+uv run --python "${ENV_PYTHON}" python - <<'PY'
+from transformers.models.siglip import check
+print("siglip.check ok:", check.check_whether_transformers_replace_is_installed_correctly())
+PY
+
+  fi
 
   # This creates the Assets/ directory with all required simulation resources
   if [[ -z "${HF_TOKEN:-}" ]]; then
     log "HF_TOKEN is not set; cannot download gated/rate-limited Hugging Face assets"
     return 1
   fi
-  hf download lehome/asset_challenge --repo-type dataset --local-dir "${SHARED_DIR}/Assets"
-  hf download lehome/dataset_challenge_merged --repo-type dataset --local-dir "${SHARED_DIR}/Datasets/example"
-
+  if [[ ! -d "${SHARED_DIR}/Assets" ]]; then
+    hf download lehome/asset_challenge --repo-type dataset --local-dir "${SHARED_DIR}/Assets"
+  fi
+  if [[ ! -d "${SHARED_DIR}/Datasets/example" ]]; then
+    hf download lehome/dataset_challenge_merged --repo-type dataset --local-dir "${SHARED_DIR}/Datasets/example"
+  fi
 
   if [[ -n "${ENV_HASH_SOURCE}" ]]; then
     mkdir -p "${ENV_CACHE_DIR}"

@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=lehome-challenge-train
 #SBATCH --partition=kill-shared
-#SBATCH --time=12:00:00
-#SBATCH --cpus-per-task=2
+#SBATCH --time=06:00:00
+#SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=hopper
@@ -124,4 +124,15 @@ echo "OMNI_KIT_ACCEPT_EULA=${OMNI_KIT_ACCEPT_EULA}"
 export CUDA_VISIBLE_DEVICES=0
 
 OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA}" uv run lerobot-train --config_path=${CONFIG_PATH}
+
+OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA}" uv run python -m scripts.eval \
+    --policy_type lerobot \
+    --policy_path outputs/train/act_top_long/checkpoints/last/pretrained_model \
+    --garment_type "top_long" \
+    --dataset_root ../../../Datasets/example/top_long_merged \
+    --garment_cfg_base_path ../../../Assets/objects/Challenge_Garment \
+    --num_episodes 2 \
+    --device cpu \
+    --enable_cameras \
+    --headless
 ' bash "$@"
