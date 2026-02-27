@@ -1,13 +1,14 @@
 dataset:
-  repo_id: repo_act
+  repo_id: repo_groot_n15
   root: Datasets/augmented_tau_test_cpu/top_long_merged
   video_backend: pyav
 
 policy:
-  type: act
+  # GR00T N1.5 policy in LeRobot.
+  type: groot
   device: cuda
   push_to_hub: false
-  
+
   input_features:
     observation.state:
       type: STATE
@@ -24,13 +25,13 @@ policy:
     observation.images.right_rgb:
       type: VISUAL
       shape: [3, 480, 640]
-  
+
   output_features:
     action:
       type: ACTION
       shape: [12]
 
-output_dir: outputs/train/act_top_long_augmented_tau_test_cpu
+output_dir: outputs/train/groot_n15_top_long
 batch_size: 16
 steps: 30000
 save_freq: 5000

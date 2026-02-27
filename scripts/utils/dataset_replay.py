@@ -227,11 +227,46 @@ def create_replay_dataset(
         output_path.mkdir(parents=True, exist_ok=True)
 
     # Use the same features as the source dataset
-    features = source_dataset.meta.features
+    features = dict(source_dataset.meta.features)
 
     # Optionally remove depth if disabled
     if args.disable_depth and "observation.top_depth" in features:
         features = {k: v for k, v in features.items() if k != "observation.top_depth"}
+    if args.augment_tau_norm:
+        state_dim = int(features["observation.state"]["shape"][0])
+        if state_dim == 12:
+            tau_names = [
+                "left_shoulder_pan",
+                "left_shoulder_lift",
+                "left_elbow_flex",
+                "left_wrist_flex",
+                "left_wrist_roll",
+                "left_gripper",
+                "right_shoulder_pan",
+                "right_shoulder_lift",
+                "right_elbow_flex",
+                "right_wrist_flex",
+                "right_wrist_roll",
+                "right_gripper",
+            ]
+        elif state_dim == 6:
+            tau_names = [
+                "shoulder_pan",
+                "shoulder_lift",
+                "elbow_flex",
+                "wrist_flex",
+                "wrist_roll",
+                "gripper",
+            ]
+        else:
+            raise ValueError(
+                f"Unsupported state dim for tau augmentation: {state_dim}. Expected 6 or 12."
+            )
+        features["observation.tau_norm"] = {
+            "dtype": "float32",
+            "shape": (state_dim,),
+            "names": tau_names,
+        }
 
     logger.info(f"Creating replay dataset at: {root}")
     replay_dataset = LeRobotDataset.create(
@@ -550,6 +585,10 @@ def replay(args: argparse.Namespace) -> None:
 
     logger.info(f"Creating environment: {args.task}")
     env_cfg = parse_env_cfg(args.task, device=device)
+    if args.augment_tau_norm:
+        env_cfg.enable_tau_norm_observation = True
+        # Keep randomization off for deterministic augmentation.
+        env_cfg.enable_tau_obs_domain_rand = False
 
     # Set garment configuration
     try:

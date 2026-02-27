@@ -259,6 +259,12 @@ def setup_replay_parser(
         default=False,
         help="Disable depth observation during replay.",
     )
+    parser.add_argument(
+        "--augment_tau_norm",
+        action="store_true",
+        default=False,
+        help="Augment replay dataset with observation.tau_norm (12D for bi-arm).",
+    )
 
     return parser
 

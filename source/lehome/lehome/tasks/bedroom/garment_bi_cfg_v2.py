@@ -20,6 +20,13 @@ class GarmentEnvCfg(DirectRLEnvCfg):
     action_space = 12
     observation_space = 12
     state_space = 0
+    # torque observation
+    enable_tau_norm_observation: bool = False
+    # sim-to-real randomization for torque observation
+    enable_tau_obs_domain_rand: bool = False
+    tau_obs_scale_std: float = 0.10
+    tau_obs_bias_std: float = 0.02
+    tau_obs_noise_std: float = 0.02
     # simulation
     render_cfg = sim_utils.RenderCfg(rendering_mode="quality", antialiasing_mode="FXAA")
     sim: SimulationCfg = SimulationCfg(

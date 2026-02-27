@@ -38,6 +38,20 @@ class GarmentEnv(DirectRLEnv):
         self.cfg = cfg
         self.action_scale = self.cfg.action_scale
         self.object = None  # Will be created in _setup_scene
+        self._force_probe_printed = False
+        self._enable_tau_norm_observation = bool(
+            getattr(self.cfg, "enable_tau_norm_observation", False)
+        )
+        self._enable_tau_obs_domain_rand = bool(
+            getattr(self.cfg, "enable_tau_obs_domain_rand", False)
+        )
+        self._tau_obs_scale_std = float(getattr(self.cfg, "tau_obs_scale_std", 0.0))
+        self._tau_obs_bias_std = float(getattr(self.cfg, "tau_obs_bias_std", 0.0))
+        self._tau_obs_noise_std = float(getattr(self.cfg, "tau_obs_noise_std", 0.0))
+        self._tau_norm_debug_enabled = False
+        self._tau_norm_debug_step = 0
+        self._tau_norm_log_every = 10
+        self._contact_wrench_threshold = 3e-3
 
         # Cache for distance-based reward (to handle step_interval decorator)
         self._last_computed_reward = 0.0
@@ -305,7 +319,159 @@ class GarmentEnv(DirectRLEnv):
             .squeeze(),
             "observation.top_depth": depth_mm,
         }
+        if self._enable_tau_norm_observation:
+            observations["observation.tau_norm"] = self._get_tau_norm_observation()
+
+        # Debug probe (one-time): inspect force/torque-like tensors available in sim state.
+        if not self._force_probe_printed:
+            self._debug_print_force_candidates()
+            self._force_probe_printed = True
+        if self._tau_norm_debug_enabled:
+            self._debug_log_tau_norm_on_contact()
+
         return observations
+
+    def _debug_print_force_candidates(self):
+        """Print one-time summary of possible force/torque/contact tensors."""
+
+        def _summarize_arm_data(arm_name: str, arm_obj: Articulation):
+            try:
+                data = arm_obj.data
+                candidate_names = [
+                    name
+                    for name in dir(data)
+                    if any(
+                        token in name.lower()
+                        for token in ("force", "torque", "effort", "contact", "wrench")
+                    )
+                    and not name.startswith("_")
+                ]
+
+                if not candidate_names:
+                    logger.info(
+                        f"[ForceProbe] {arm_name}: no force/torque/contact-like fields in arm.data"
+                    )
+                    return
+
+                logger.info(
+                    f"[ForceProbe] {arm_name}: candidate fields -> {candidate_names}"
+                )
+
+                for name in candidate_names:
+                    try:
+                        value = getattr(data, name)
+                    except Exception as e:
+                        logger.info(
+                            f"[ForceProbe] {arm_name}.{name}: <unreadable> ({type(e).__name__}: {e})"
+                        )
+                        continue
+
+                    if isinstance(value, torch.Tensor):
+                        shape = tuple(value.shape)
+                        dtype = str(value.dtype)
+                        # Flatten for robust scalar stats across arbitrary tensor ranks.
+                        flat = value.detach().flatten()
+                        if flat.numel() > 0:
+                            min_v = float(flat.min().item())
+                            max_v = float(flat.max().item())
+                            logger.info(
+                                f"[ForceProbe] {arm_name}.{name}: tensor shape={shape}, dtype={dtype}, min={min_v:.6f}, max={max_v:.6f}"
+                            )
+                        else:
+                            logger.info(
+                                f"[ForceProbe] {arm_name}.{name}: tensor shape={shape}, dtype={dtype}, empty"
+                            )
+                    else:
+                        logger.info(
+                            f"[ForceProbe] {arm_name}.{name}: type={type(value).__name__}"
+                        )
+            except Exception as e:
+                logger.warning(
+                    f"[ForceProbe] Failed to inspect {arm_name} arm data: {type(e).__name__}: {e}"
+                )
+
+        _summarize_arm_data("left_arm", self.left_arm)
+        _summarize_arm_data("right_arm", self.right_arm)
+
+    def _debug_log_tau_norm_on_contact(self):
+        """Log normalized joint torques when contact-like wrench magnitude is detected."""
+        self._tau_norm_debug_step += 1
+        if self._tau_norm_debug_step % self._tau_norm_log_every != 0:
+            return
+
+        try:
+            left_wrench = self.left_arm.data.body_incoming_joint_wrench_b
+            right_wrench = self.right_arm.data.body_incoming_joint_wrench_b
+
+            # Max norm across links; use this as a simple contact proxy.
+            left_contact_mag = torch.linalg.norm(left_wrench, dim=-1).max().item()
+            right_contact_mag = torch.linalg.norm(right_wrench, dim=-1).max().item()
+            contact_mag = max(left_contact_mag, right_contact_mag)
+
+            if contact_mag < self._contact_wrench_threshold:
+                return
+
+            eps = 1e-6
+            left_tau_norm = self.left_arm.data.applied_torque / torch.clamp(
+                self.left_arm.data.joint_effort_limits, min=eps
+            )
+            right_tau_norm = self.right_arm.data.applied_torque / torch.clamp(
+                self.right_arm.data.joint_effort_limits, min=eps
+            )
+
+            left_tau_np = left_tau_norm[0].detach().cpu().numpy()
+            right_tau_np = right_tau_norm[0].detach().cpu().numpy()
+            left_max_abs = float(np.max(np.abs(left_tau_np)))
+            right_max_abs = float(np.max(np.abs(right_tau_np)))
+
+            logger.info(
+                "[TauNorm] step=%d contact_mag=%.6f left_max_abs=%.3f right_max_abs=%.3f left=%s right=%s",
+                self._tau_norm_debug_step,
+                contact_mag,
+                left_max_abs,
+                right_max_abs,
+                np.array2string(left_tau_np, precision=3, floatmode="fixed"),
+                np.array2string(right_tau_np, precision=3, floatmode="fixed"),
+            )
+        except Exception as e:
+            logger.warning(
+                f"[TauNorm] Failed to compute tau_norm debug output: {type(e).__name__}: {e}"
+            )
+
+    def _get_tau_norm_observation(self) -> np.ndarray:
+        """Build normalized joint torque observation for both arms."""
+        eps = 1e-6
+        left_tau_norm = self.left_arm.data.applied_torque / torch.clamp(
+            self.left_arm.data.joint_effort_limits, min=eps
+        )
+        right_tau_norm = self.right_arm.data.applied_torque / torch.clamp(
+            self.right_arm.data.joint_effort_limits, min=eps
+        )
+        tau_norm = torch.cat([left_tau_norm, right_tau_norm], dim=1).squeeze(0)
+
+        if self._enable_tau_obs_domain_rand:
+            tau_norm = self._apply_tau_obs_domain_randomization(tau_norm)
+
+        tau_norm = torch.clamp(tau_norm, -1.0, 1.0)
+        return tau_norm.detach().cpu().numpy().astype(np.float32)
+
+    def _apply_tau_obs_domain_randomization(self, tau_norm: torch.Tensor) -> torch.Tensor:
+        """Apply lightweight sim-to-real randomization to normalized torque observations."""
+        tau_out = tau_norm
+
+        if self._tau_obs_scale_std > 0.0:
+            scale = 1.0 + torch.randn_like(tau_out) * self._tau_obs_scale_std
+            tau_out = tau_out * scale
+
+        if self._tau_obs_bias_std > 0.0:
+            bias = torch.randn_like(tau_out) * self._tau_obs_bias_std
+            tau_out = tau_out + bias
+
+        if self._tau_obs_noise_std > 0.0:
+            noise = torch.randn_like(tau_out) * self._tau_obs_noise_std
+            tau_out = tau_out + noise
+
+        return tau_out
 
     def _get_workspace_pointcloud(
         self, env_index: int = 0, num_points: int = 2048, use_fps: bool = False
