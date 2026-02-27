@@ -6,6 +6,43 @@ log() {
   printf '[setup_env] %s\n' "$*" >&2
 }
 
+patch_groot_flow_matching_action_head() {
+  local target_file="${SHARED_ENV_DIR}/lib/python3.11/site-packages/lerobot/policies/groot/action_head/flow_matching_action_head.py"
+  local old_line="self.beta_dist = Beta(config.noise_beta_alpha, config.noise_beta_beta)"
+  local new_line="self.beta_dist = Beta(config.noise_beta_alpha, config.noise_beta_beta, validate_args=False)"
+
+  if [[ ! -f "${target_file}" ]]; then
+    log "Expected Groot action head file not found: ${target_file}"
+    return 1
+  fi
+
+  if grep -Fq "${new_line}" "${target_file}"; then
+    log "Groot action head already patched"
+    return 0
+  fi
+
+  if ! grep -Fq "${old_line}" "${target_file}"; then
+    log "Expected Beta(...) line not found in ${target_file}"
+    return 1
+  fi
+
+  "${ENV_PYTHON}" - "${target_file}" "${old_line}" "${new_line}" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+old = sys.argv[2]
+new = sys.argv[3]
+content = path.read_text()
+count = content.count(old)
+if count != 1:
+    raise SystemExit(f"Expected exactly one match for patch target, found {count}")
+path.write_text(content.replace(old, new))
+PY
+
+  log "Patched Groot action head Beta distribution initialization"
+}
+
 clone_or_fetch_isaaclab() {
   local target_dir="$1"
   local archive_url="https://github.com/lehome-official/IsaacLab/archive/refs/heads/main.tar.gz"
@@ -225,6 +262,9 @@ if [[ "${recreate}" -eq 1 ]]; then
     uv pip install --python "${ENV_PYTHON}" "lerobot[${LEROBOT_EXTRA}]==${LEROBOT_VERSION}"
   else
     uv pip install --python "${ENV_PYTHON}" "lerobot==${LEROBOT_VERSION}"
+  fi
+  if [[ "${LEROBOT_EXTRA}" == "groot" ]]; then
+    patch_groot_flow_matching_action_head
   fi
 
   mkdir -p "${SHARED_DIR}/third_party"
